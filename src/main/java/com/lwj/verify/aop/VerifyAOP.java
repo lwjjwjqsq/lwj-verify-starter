@@ -6,6 +6,8 @@ import com.auth0.jwt.interfaces.DecodedJWT;
 import com.lwj.verify.annotation.Value;
 import com.lwj.verify.annotation.Verify;
 import com.lwj.verify.inter.GetTokenInterface;
+import com.lwj.verify.inter.NotLoginInterface;
+import com.lwj.verify.inter.NotLoginInterfaceDefault;
 import com.lwj.verify.property.VerifyProperty;
 import com.lwj.verify.util.JWTUtil;
 import lombok.AllArgsConstructor;
@@ -30,6 +32,7 @@ import java.util.Enumeration;
 public class VerifyAOP {
 
     private final JWTUtil jwtUtil;
+    private final NotLoginInterface notLoginInterface;
 
     @Around(value = "@annotation(com.lwj.verify.annotation.Verify)")
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
@@ -78,7 +81,7 @@ public class VerifyAOP {
                 String key = ((Value) annotation).value();
                 Claim claim = token.getClaim(key);
                 if (claim == null) {
-                    throw new RuntimeException("当前没有这key:'"+key+"'对应的值");
+                    throw new RuntimeException("当前没有这key:'" + key + "'对应的值");
                 }
                 args[i] = claim.as(parameterTypes[i]);
             }
@@ -86,14 +89,17 @@ public class VerifyAOP {
         return args;
     }
 
-    private static Object notLogin(ProceedingJoinPoint joinPoint) throws Throwable {
+    private Object notLogin(ProceedingJoinPoint joinPoint) throws Throwable {
         String methodName = joinPoint.getSignature().getName();
         Class<?> classTarget = joinPoint.getTarget().getClass();
         Class<?>[] par = ((MethodSignature) joinPoint.getSignature()).getParameterTypes();
         Method objMethod = classTarget.getMethod(methodName, par);
         Verify annotation = objMethod.getAnnotation(Verify.class);
         if (annotation.required()) {
-            return SpringUtil.getBean(annotation.noLoginProvider()).notLogin(joinPoint);
+            return annotation.noLoginProvider() == NotLoginInterfaceDefault.class ?
+                    notLoginInterface.notLogin(joinPoint)
+                    : SpringUtil.getBean(annotation.noLoginProvider()).notLogin(joinPoint)
+                    ;
         } else {
             return joinPoint.proceed();
         }
